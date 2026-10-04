@@ -44,8 +44,18 @@ class YubikeyTotpPrompter(object):
             ykman_result = subprocess.run(
                 ["ykman", "oath", "accounts", "code", "-s", self.mfa_serial], capture_output=True
             )
-            console_print("Successfully created OATH code.")
             token = ykman_result.stdout.decode("utf-8").strip()
+            if ykman_result.returncode != 0 or not token:
+                # Return the empty token anyway: AWS then fails fast with a TokenCode length
+                # error, which callers can detect and retry on.
+                error = ykman_result.stderr.decode("utf-8").strip() or "no code returned"
+                console_print(
+                    "Failed to create OATH code (ykman exit {}): {}".format(
+                        ykman_result.returncode, error
+                    )
+                )
+                return token
+            console_print("Successfully created OATH code.")
             return token
         except subprocess.CalledProcessError as e:
             print("No YubiKey found.", file=sys.stderr)
